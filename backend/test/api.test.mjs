@@ -354,6 +354,13 @@ test('supports the main account, listings, favorites, chat, and deletion flows',
     body: { body: 'Bonjour, le bien est-il toujours disponible ?' },
   });
   assert.equal(sentMessage.status, 201);
+  const conversations = await request('/conversations', { token });
+  assert.equal(conversations.status, 200);
+  const listedConversation = conversations.data.items.find(
+    (item) => item.id === conversation.data.id,
+  );
+  assert.equal(listedConversation.lastMessage, 'Bonjour, le bien est-il toujours disponible ?');
+  assert.ok(listedConversation.lastMessageAt);
   for (let attempt = 0; attempt < 20 && !serverOutput.includes('FCM delivery failed'); attempt += 1) await delay(10);
   assert.ok(serverOutput.includes('FCM delivery failed (code: not_configured).'));
 

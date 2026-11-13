@@ -1216,7 +1216,10 @@ async function handle(request, response) {
         JOIN users buyer ON buyer.id = c.buyer_id
         JOIN users owner ON owner.id = c.owner_id
         WHERE c.buyer_id = ? OR c.owner_id = ?
-        ORDER BY COALESCE("lastMessageAt", c.created_at) DESC
+        ORDER BY COALESCE(
+          (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1),
+          c.created_at
+        ) DESC
       `).all(account.id, account.id, account.id);
       json(response, 200, { items: rows });
       return;
