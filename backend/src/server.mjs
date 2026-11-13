@@ -674,14 +674,18 @@ async function handle(request, response) {
       return;
     }
 
-    if (request.method === 'POST' && ['/auth/register', '/auth/login', '/admin/login'].includes(path) && !allowAuthAttempt(request)) {
+    if (
+      request.method === 'POST'
+      && ['/auth/register', '/auth/login', '/auth/resend-verification', '/admin/login'].includes(path)
+      && !allowAuthAttempt(request)
+    ) {
       json(response, 429, { error: 'Trop de tentatives. Veuillez réessayer dans quelques minutes.' });
       return;
     }
 
     if (
       request.method === 'POST'
-      && ['/auth/register', '/auth/verify-email'].includes(path)
+      && ['/auth/register', '/auth/verify-email', '/auth/resend-verification'].includes(path)
       && !allowLimitedRequest(request, path, path === '/auth/register' ? 5 : 8)
     ) {
       json(response, 429, { error: 'Trop de tentatives. Veuillez réessayer dans quelques minutes.' });
@@ -731,6 +735,28 @@ async function handle(request, response) {
         }
         throw error;
       }
+      return;
+    }
+
+    if (request.method === 'POST' && path === '/auth/resend-verification') {
+      const input = await bodyOf(request);
+      const email = String(input.email ?? '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        json(response, 400, { error: 'Saisissez une adresse e-mail valide.' });
+        return;
+      }
+      const account = await db.prepare(
+        'SELECT id FROM users WHERE email = ? AND email_verified = 0',
+      ).get(email);
+      if (account) {
+        const verificationToken = await createAuthToken(account.id, 'verify_email');
+        sendAuthEmail(email, verificationToken, 'verify_email').catch((error) => {
+          logDeliveryError('SMTP email', error);
+        });
+      }
+      json(response, 200, {
+        message: 'Si un compte correspondant peut être vérifié, un courriel de confirmation a été envoyé.',
+      });
       return;
     }
 
@@ -811,7 +837,10 @@ async function handle(request, response) {
         return;
       }
       if (requireEmailVerification && !account.email_verified) {
-        json(response, 403, { error: 'Veuillez vérifier votre adresse e-mail avant de vous connecter.' });
+        json(response, 403, {
+          code: 'email_verification_required',
+          error: 'Veuillez vérifier votre adresse e-mail avant de vous connecter.',
+        });
         return;
       }
       const safeUser = await db.prepare('SELECT id, name, email, phone, city, about FROM users WHERE id = ?').get(account.id);

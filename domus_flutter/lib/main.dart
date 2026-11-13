@@ -103,6 +103,7 @@ class DomusApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
+        fontFamily: 'Nunito',
         scaffoldBackgroundColor: background,
         colorScheme: ColorScheme.fromSeed(seedColor: teal, primary: teal),
         appBarTheme: const AppBarTheme(
@@ -435,6 +436,7 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
       throw DomusApiException(
         response.statusCode,
         data['error']?.toString() ?? 'Erreur API (${response.statusCode}).',
+        data['code']?.toString(),
       );
     }
     return data;
@@ -662,7 +664,19 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
         _showNotice('Bienvenue chez vous !');
       }
     } catch (error) {
-      if (mounted) {
+      if (error is DomusApiException &&
+          error.code == 'email_verification_required') {
+        _authPassword.clear();
+        _authToken.clear();
+        if (!mounted) return;
+        setState(() {
+          _registerMode = false;
+          _authFlow = 'verify';
+        });
+        _showNotice(
+          'Votre adresse e-mail n’est pas encore vérifiée. Saisissez le code reçu ou demandez un nouvel envoi.',
+        );
+      } else if (mounted) {
         _showNotice(error.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
@@ -694,6 +708,33 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
       _showNotice(
         'Ce code de vérification est invalide ou expiré. Vérifiez-le.',
       );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _resendVerificationEmail() async {
+    final email = _authEmail.text.trim();
+    if (email.isEmpty) {
+      _showNotice('Saisissez votre adresse e-mail.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await _request(
+        '/auth/resend-verification',
+        method: 'POST',
+        body: {'email': email},
+      );
+      if (mounted) {
+        _showNotice(
+          'Si un compte correspondant peut être vérifié, un courriel de confirmation a été envoyé.',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        _showNotice(error.toString().replaceFirst('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -3044,6 +3085,14 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
               ),
               Center(
                 child: TextButton(
+                  onPressed: _busy ? null : _resendVerificationEmail,
+                  child: const _LocalizedText(
+                    'Renvoyer le courriel de vérification',
+                  ),
+                ),
+              ),
+              Center(
+                child: TextButton(
                   onPressed: () => setState(() => _authFlow = 'login'),
                   child: const _LocalizedText('Retour à la connexion'),
                 ),
@@ -4025,10 +4074,11 @@ class _PropertyFilterSheetState extends State<_PropertyFilterSheet> {
 }
 
 class DomusApiException implements Exception {
-  const DomusApiException(this.statusCode, this.message);
+  const DomusApiException(this.statusCode, this.message, [this.code]);
 
   final int statusCode;
   final String message;
+  final String? code;
 
   @override
   String toString() => message;

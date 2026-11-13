@@ -402,7 +402,7 @@ test('supports the main account, listings, favorites, chat, and deletion flows',
   assert.ok(registration.data.token);
 });
 
-test('requires email verification when configured and keeps removed recovery endpoints disabled', async () => {
+test('requires email verification and supports resending verification emails', async () => {
   const productionDatabase = join(tmpdir(), `domus-production-test-${process.pid}.sqlite`);
   const productionUploads = join(tmpdir(), `domus-production-uploads-${process.pid}`);
   const port = await unusedPort();
@@ -465,24 +465,48 @@ test('requires email verification when configured and keeps removed recovery end
     assert.equal(registration.status, 201);
     assert.equal(registration.data.verificationRequired, true);
     assert.equal(registration.data.token, undefined);
-    assert.equal((await productionRequest('/auth/login', {
+    const unverifiedLogin = await productionRequest('/auth/login', {
       email: 'verified@domus.test',
       password: 'Password123',
-    })).status, 403);
+    });
+    assert.equal(unverifiedLogin.status, 403);
+    assert.equal(unverifiedLogin.data.code, 'email_verification_required');
     for (let attempt = 0; attempt < 40 && smtpMessages.length <= previousMessageCount; attempt += 1) await delay(25);
     const originalVerificationToken = smtpMessages.at(-1)?.match(/\n([a-f0-9]{64})\n/i)?.[1];
     assert.ok(originalVerificationToken, 'verification email should contain a one-time token');
     assert.equal((await productionRequest('/auth/verification/resend', {
       email: 'verified@domus.test',
     })).status, 404);
+    const beforeResendCount = smtpMessages.length;
+    const resent = await productionRequest('/auth/resend-verification', {
+      email: 'verified@domus.test',
+    });
+    assert.equal(resent.status, 200);
+    assert.equal(
+      resent.data.message,
+      'Si un compte correspondant peut être vérifié, un courriel de confirmation a été envoyé.',
+    );
+    for (let attempt = 0; attempt < 40 && smtpMessages.length <= beforeResendCount; attempt += 1) await delay(25);
+    const resentVerificationToken = smtpMessages.at(-1)?.match(/\n([a-f0-9]{64})\n/i)?.[1];
+    assert.ok(resentVerificationToken, 'resend email should contain a one-time token');
+    assert.notEqual(resentVerificationToken, originalVerificationToken);
+    const missingAccountResend = await productionRequest('/auth/resend-verification', {
+      email: 'missing@domus.test',
+    });
+    assert.equal(missingAccountResend.status, 200);
+    assert.deepEqual(missingAccountResend.data, resent.data);
+    assert.equal(smtpMessages.length, beforeResendCount + 1);
     assert.equal((await productionRequest('/auth/forgot-password', {
       email: 'verified@domus.test',
     })).status, 404);
     assert.equal((await productionRequest('/auth/verify-email', {
       token: originalVerificationToken,
+    })).status, 400);
+    assert.equal((await productionRequest('/auth/verify-email', {
+      token: resentVerificationToken,
     })).status, 200);
     assert.equal((await productionRequest('/auth/verify-email', {
-      token: originalVerificationToken,
+      token: resentVerificationToken,
     })).status, 400);
     assert.equal((await productionRequest('/auth/login', {
       email: 'verified@domus.test',

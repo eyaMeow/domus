@@ -261,6 +261,8 @@ const _translations = <String, Map<String, String>>{
         'Enter the code sent by email and your new password.',
     'Saisissez le code reçu par e-mail ou demandez un nouvel envoi.':
         'Enter the code sent by email or request a new one.',
+    'Votre adresse e-mail n’est pas encore vérifiée. Saisissez le code reçu ou demandez un nouvel envoi.':
+        'Your email address is not verified yet. Enter the code you received or request a new one.',
     'Si cette adresse peut être vérifiée, un courriel de confirmation a été envoyé. Consultez votre boîte de réception.': 'If this address can be verified, a confirmation email has been sent. Check your inbox.',
     'Si un compte correspond à cette adresse, un courriel de réinitialisation a été envoyé.': 'If an account matches this address, a password reset email has been sent.',
     'Si un compte correspondant peut être vérifié, un courriel de confirmation a été envoyé.': 'If a matching account can be verified, a confirmation email has been sent.',
@@ -592,6 +594,8 @@ const _translations = <String, Map<String, String>>{
         'أدخل الرمز المرسل إلى بريدك الإلكتروني وكلمة المرور الجديدة.',
     'Saisissez le code reçu par e-mail ou demandez un nouvel envoi.':
         'أدخل الرمز المرسل إلى بريدك الإلكتروني أو اطلب إرساله مجددًا.',
+    'Votre adresse e-mail n’est pas encore vérifiée. Saisissez le code reçu ou demandez un nouvel envoi.':
+        'لم يتم التحقق من بريدك الإلكتروني بعد. أدخل الرمز الذي وصلك أو اطلب إرساله مجددًا.',
     'Si cette adresse peut être vérifiée, un courriel de confirmation a été envoyé. Consultez votre boîte de réception.': 'إذا أمكن التحقق من هذا العنوان، فقد أُرسلت رسالة تأكيد. تحقق من صندوق الوارد.',
     'Si un compte correspond à cette adresse, un courriel de réinitialisation a été envoyé.': 'إذا كان هناك حساب مرتبط بهذا العنوان، فقد أُرسلت رسالة لإعادة تعيين كلمة المرور.',
     'Si un compte correspondant peut être vérifié, un courriel de confirmation a été envoyé.':
