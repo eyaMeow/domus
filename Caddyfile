@@ -1,0 +1,3 @@
+api.noxel.app {
+	reverse_proxy api:4000
+}

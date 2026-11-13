@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "Domus",
+    "slug": "domus",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#128078"
+    },
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "app.noxel.domus.reactnative",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "app.noxel.domus.reactnative",
+      "versionCode": 1,
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#128078",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Domus utilise vos photos pour illustrer les annonces immobilières que vous publiez."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Domus utilise votre position pour vous situer sur la carte et trouver les annonces à proximité."
+        }
+      ]
+    ]
+  }
+}
