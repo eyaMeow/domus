@@ -67,6 +67,24 @@ String get apiBaseUrl {
   return 'http://localhost:4000';
 }
 
+String resolvePhotoUrl(String value) {
+  var url = value.trim();
+  if (url.isEmpty) return '';
+
+  final apiOrigin = Uri.parse(apiBaseUrl).origin;
+  if (url.startsWith(apiOrigin)) {
+    final remainder = url.substring(apiOrigin.length);
+    if (remainder.startsWith('http://') || remainder.startsWith('https://')) {
+      url = remainder;
+    }
+  }
+
+  final uri = Uri.parse(url);
+  return uri.hasScheme
+      ? uri.toString()
+      : Uri.parse(apiBaseUrl).resolveUri(uri).toString();
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (kIsWeb) {
@@ -964,9 +982,11 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
           : LatLng(latitude, longitude);
       _listingSurface.text = property['surface']?.toString() ?? '';
       _listingBedrooms.text = property['bedrooms']?.toString() ?? '';
-      _listingImage.text = property['imageUrl'] as String? ?? '';
+      _listingImage.text = resolvePhotoUrl(
+        property['imageUrl'] as String? ?? '',
+      );
       _listingPhotos = (property['photos'] as List? ?? [])
-          .map((photo) => photo.toString())
+          .map((photo) => resolvePhotoUrl(photo.toString()))
           .toList();
       _postTransaction = property['transaction'] as String? ?? 'Vente';
       _postType = property['type'] as String? ?? 'Appartement';
@@ -1016,7 +1036,7 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
               'base64': base64Encode(bytes),
             },
           );
-          return '$apiBaseUrl${response['url']}';
+          return resolvePhotoUrl(response['url'].toString());
         }),
       );
       if (!mounted) return;
@@ -2348,15 +2368,6 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
             style: TextStyle(color: muted),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _LocalizedText(
-            _t(
-              'Les alertes liées à une activité distante nécessitent Internet; les notifications locales ne requièrent pas Firebase.',
-            ),
-            style: const TextStyle(color: muted, fontSize: 12),
-          ),
-        ),
         SwitchListTile(
           value: _notificationsEnabled,
           onChanged: (value) => setState(() => _notificationsEnabled = value),
@@ -2899,7 +2910,7 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(12),
                               child: Image.network(
-                                property['imageUrl'] as String,
+                                resolvePhotoUrl(property['imageUrl'] as String),
                                 height: 170,
                                 width: 360,
                                 fit: BoxFit.cover,
@@ -3235,7 +3246,7 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
   }
 
   Widget _propertyCard(Map<String, dynamic> property) {
-    final image = property['imageUrl'] as String? ?? '';
+    final image = resolvePhotoUrl(property['imageUrl'] as String? ?? '');
     final favorite = property['favorite'] == true;
     return Card(
       color: Colors.white,
@@ -3683,11 +3694,11 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
 
   List<String> _propertyPhotos(Map<String, dynamic> property) {
     final listed = (property['photos'] as List? ?? [])
-        .map((photo) => photo.toString())
+        .map((photo) => resolvePhotoUrl(photo.toString()))
         .where((photo) => photo.isNotEmpty)
         .toList();
     if (listed.isNotEmpty) return listed;
-    final image = property['imageUrl'] as String? ?? '';
+    final image = resolvePhotoUrl(property['imageUrl'] as String? ?? '');
     return image.isEmpty ? [] : [image];
   }
 

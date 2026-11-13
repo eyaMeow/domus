@@ -20,7 +20,6 @@ const _translations = <String, Map<String, String>>{
         'Local notifications are enabled on this device.',
     'Les notifications locales sont désactivées.':
         'Local notifications are disabled.',
-    'Les alertes liées à une activité distante nécessitent Internet; les notifications locales ne requièrent pas Firebase.': 'Alerts about remote activity require an internet connection; local notifications do not require Firebase.',
     'Données collectées': 'Data collected',
     'Nom, adresse e-mail et téléphone facultatif du compte; annonces, photos, ville et emplacement précis fournis par leur propriétaire.': 'Account name, email address, and optional phone number; listings, photos, city, and precise location supplied by their owner.',
     'Activité du compte': 'Account activity',
@@ -350,7 +349,6 @@ const _translations = <String, Map<String, String>>{
         'تم تفعيل الإشعارات المحلية على هذا الجهاز.',
     'Les notifications locales sont désactivées.':
         'تم تعطيل الإشعارات المحلية.',
-    'Les alertes liées à une activité distante nécessitent Internet; les notifications locales ne requièrent pas Firebase.': 'تتطلب التنبيهات المتعلقة بالنشاط البعيد اتصالًا بالإنترنت؛ ولا تتطلب الإشعارات المحلية Firebase.',
     'Données collectées': 'البيانات التي يتم جمعها',
     'Nom, adresse e-mail et téléphone facultatif du compte; annonces, photos, ville et emplacement précis fournis par leur propriétaire.': 'اسم الحساب والبريد الإلكتروني ورقم الهاتف الاختياري؛ والإعلانات والصور والمدينة والموقع الدقيق الذي يحدده المالك.',
     'Activité du compte': 'نشاط الحساب',

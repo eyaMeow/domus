@@ -14,6 +14,16 @@ Future<void> pumpReadyApp(WidgetTester tester) async {
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
+  test('resolves absolute, relative, and previously prefixed photo URLs', () {
+    const absoluteUrl = 'https://storage.example/photo.jpg';
+    expect(resolvePhotoUrl(absoluteUrl), absoluteUrl);
+    expect(resolvePhotoUrl('$apiBaseUrl$absoluteUrl'), absoluteUrl);
+    expect(
+      resolvePhotoUrl('/uploads/photo.jpg'),
+      Uri.parse(apiBaseUrl).resolve('/uploads/photo.jpg').toString(),
+    );
+  });
+
   testWidgets('shows the branded loading splash', (tester) async {
     await tester.pumpWidget(const DomusApp());
 
@@ -168,7 +178,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Notifications locales'), findsOneWidget);
-    expect(find.textContaining('ne requièrent pas Firebase'), findsOneWidget);
+    expect(find.textContaining('ne requièrent pas Firebase'), findsNothing);
     expect(
       tester
           .widget<SwitchListTile>(find.byType(SwitchListTile).first)
