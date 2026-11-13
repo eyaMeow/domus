@@ -115,9 +115,12 @@ const _translations = <String, Map<String, String>>{
     'Les nouveaux messages et annonces apparaîtront ici.':
         'New messages and listings will appear here.',
     'Vérifier votre adresse e-mail': 'Verify your email address',
-    'Saisissez le code de vérification reçu par e-mail. Vous pouvez aussi demander un nouvel envoi.': 'Enter the verification code sent to your email. You can also request another email.',
+    'Saisissez le code de vérification à 6 chiffres reçu par e-mail. Vous pouvez aussi demander un nouvel envoi.': 'Enter the 6-digit verification code sent to your email. You can also request another email.',
     'Code de vérification': 'Verification code',
+    'Code à 6 chiffres': '6-digit code',
     'Code reçu par e-mail': 'Code received by email',
+    'Saisissez les 6 chiffres du code de vérification reçu par e-mail.':
+        'Enter the 6 digits from your verification email.',
     'Vérifier mon adresse': 'Verify my address',
     'Renvoyer le courriel': 'Resend email',
     'Retour à la connexion': 'Back to sign in',
@@ -261,8 +264,7 @@ const _translations = <String, Map<String, String>>{
         'Enter the code sent by email and your new password.',
     'Saisissez le code reçu par e-mail ou demandez un nouvel envoi.':
         'Enter the code sent by email or request a new one.',
-    'Votre adresse e-mail n’est pas encore vérifiée. Saisissez le code reçu ou demandez un nouvel envoi.':
-        'Your email address is not verified yet. Enter the code you received or request a new one.',
+    'Votre adresse e-mail n’est pas encore vérifiée. Saisissez le code reçu ou demandez un nouvel envoi.': 'Your email address is not verified yet. Enter the code you received or request a new one.',
     'Si cette adresse peut être vérifiée, un courriel de confirmation a été envoyé. Consultez votre boîte de réception.': 'If this address can be verified, a confirmation email has been sent. Check your inbox.',
     'Si un compte correspond à cette adresse, un courriel de réinitialisation a été envoyé.': 'If an account matches this address, a password reset email has been sent.',
     'Si un compte correspondant peut être vérifié, un courriel de confirmation a été envoyé.': 'If a matching account can be verified, a confirmation email has been sent.',
@@ -447,10 +449,13 @@ const _translations = <String, Map<String, String>>{
     'Les nouveaux messages et annonces apparaîtront ici.':
         'ستظهر الرسائل والإعلانات الجديدة هنا.',
     'Vérifier votre adresse e-mail': 'تحقق من بريدك الإلكتروني',
-    'Saisissez le code de vérification reçu par e-mail. Vous pouvez aussi demander un nouvel envoi.':
+    'Saisissez le code de vérification à 6 chiffres reçu par e-mail. Vous pouvez aussi demander un nouvel envoi.':
         'أدخل رمز التحقق المرسل إلى بريدك الإلكتروني. يمكنك طلب إرساله مجددًا.',
     'Code de vérification': 'رمز التحقق',
+    'Code à 6 chiffres': 'رمز من 6 أرقام',
     'Code reçu par e-mail': 'الرمز المرسل بالبريد الإلكتروني',
+    'Saisissez les 6 chiffres du code de vérification reçu par e-mail.':
+        'أدخل الأرقام الستة الموجودة في رسالة التحقق.',
     'Vérifier mon adresse': 'تحقق من بريدي',
     'Renvoyer le courriel': 'إعادة إرسال البريد',
     'Retour à la connexion': 'العودة لتسجيل الدخول',
@@ -594,8 +599,7 @@ const _translations = <String, Map<String, String>>{
         'أدخل الرمز المرسل إلى بريدك الإلكتروني وكلمة المرور الجديدة.',
     'Saisissez le code reçu par e-mail ou demandez un nouvel envoi.':
         'أدخل الرمز المرسل إلى بريدك الإلكتروني أو اطلب إرساله مجددًا.',
-    'Votre adresse e-mail n’est pas encore vérifiée. Saisissez le code reçu ou demandez un nouvel envoi.':
-        'لم يتم التحقق من بريدك الإلكتروني بعد. أدخل الرمز الذي وصلك أو اطلب إرساله مجددًا.',
+    'Votre adresse e-mail n’est pas encore vérifiée. Saisissez le code reçu ou demandez un nouvel envoi.': 'لم يتم التحقق من بريدك الإلكتروني بعد. أدخل الرمز الذي وصلك أو اطلب إرساله مجددًا.',
     'Si cette adresse peut être vérifiée, un courriel de confirmation a été envoyé. Consultez votre boîte de réception.': 'إذا أمكن التحقق من هذا العنوان، فقد أُرسلت رسالة تأكيد. تحقق من صندوق الوارد.',
     'Si un compte correspond à cette adresse, un courriel de réinitialisation a été envoyé.': 'إذا كان هناك حساب مرتبط بهذا العنوان، فقد أُرسلت رسالة لإعادة تعيين كلمة المرور.',
     'Si un compte correspondant peut être vérifié, un courriel de confirmation a été envoyé.':

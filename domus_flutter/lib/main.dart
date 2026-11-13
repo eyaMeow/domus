@@ -685,8 +685,16 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
   }
 
   Future<void> _verifyEmail() async {
-    if (_authToken.text.trim().isEmpty) {
-      _showNotice('Saisissez le code de vérification reçu par courriel.');
+    final code = _authToken.text.trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      _showNotice(
+        'Saisissez les 6 chiffres du code de vérification reçu par e-mail.',
+      );
+      return;
+    }
+    final email = _authEmail.text.trim();
+    if (email.isEmpty) {
+      _showNotice('Saisissez votre adresse e-mail.');
       return;
     }
     setState(() => _busy = true);
@@ -694,7 +702,7 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
       await _request(
         '/auth/verify-email',
         method: 'POST',
-        body: {'token': _authToken.text.trim()},
+        body: {'email': email, 'token': code},
       );
       if (!mounted) return;
       setState(() {
@@ -3070,13 +3078,16 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
               ),
               const SizedBox(height: 6),
               const _LocalizedText(
-                'Saisissez le code de vérification reçu par e-mail.',
+                'Saisissez le code de vérification à 6 chiffres reçu par e-mail.',
                 style: TextStyle(color: muted, fontSize: 12),
               ),
               _textField(
                 'Code de vérification',
                 _authToken,
-                hint: 'Code reçu par e-mail',
+                hint: 'Code à 6 chiffres',
+                keyboard: TextInputType.number,
+                maxLength: 6,
+                digitsOnly: true,
               ),
               const SizedBox(height: 12),
               _primaryButton(
@@ -3751,6 +3762,8 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
     String? hint,
     TextInputType? keyboard,
     int maxLines = 1,
+    int? maxLength,
+    bool digitsOnly = false,
     bool obscure = false,
   }) {
     return Padding(
@@ -3758,11 +3771,16 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
       child: TextField(
         controller: controller,
         keyboardType: keyboard,
+        inputFormatters: digitsOnly
+            ? [FilteringTextInputFormatter.digitsOnly]
+            : null,
+        maxLength: maxLength,
         maxLines: obscure ? 1 : maxLines,
         obscureText: obscure,
         decoration: InputDecoration(
           labelText: _t(label),
           hintText: hint == null ? null : _t(hint),
+          counterText: maxLength == null ? null : '',
         ),
       ),
     );

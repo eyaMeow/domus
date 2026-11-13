@@ -472,8 +472,8 @@ test('requires email verification and supports resending verification emails', a
     assert.equal(unverifiedLogin.status, 403);
     assert.equal(unverifiedLogin.data.code, 'email_verification_required');
     for (let attempt = 0; attempt < 40 && smtpMessages.length <= previousMessageCount; attempt += 1) await delay(25);
-    const originalVerificationToken = smtpMessages.at(-1)?.match(/\n([a-f0-9]{64})\n/i)?.[1];
-    assert.ok(originalVerificationToken, 'verification email should contain a one-time token');
+    const originalVerificationCode = smtpMessages.at(-1)?.match(/\n(\d{6})\n/)?.[1];
+    assert.ok(originalVerificationCode, 'verification email should contain a six-digit code');
     assert.equal((await productionRequest('/auth/verification/resend', {
       email: 'verified@domus.test',
     })).status, 404);
@@ -487,9 +487,9 @@ test('requires email verification and supports resending verification emails', a
       'Si un compte correspondant peut être vérifié, un courriel de confirmation a été envoyé.',
     );
     for (let attempt = 0; attempt < 40 && smtpMessages.length <= beforeResendCount; attempt += 1) await delay(25);
-    const resentVerificationToken = smtpMessages.at(-1)?.match(/\n([a-f0-9]{64})\n/i)?.[1];
-    assert.ok(resentVerificationToken, 'resend email should contain a one-time token');
-    assert.notEqual(resentVerificationToken, originalVerificationToken);
+    const resentVerificationCode = smtpMessages.at(-1)?.match(/\n(\d{6})\n/)?.[1];
+    assert.ok(resentVerificationCode, 'resend email should contain a six-digit code');
+    assert.notEqual(resentVerificationCode, originalVerificationCode);
     const missingAccountResend = await productionRequest('/auth/resend-verification', {
       email: 'missing@domus.test',
     });
@@ -500,13 +500,20 @@ test('requires email verification and supports resending verification emails', a
       email: 'verified@domus.test',
     })).status, 404);
     assert.equal((await productionRequest('/auth/verify-email', {
-      token: originalVerificationToken,
+      email: 'verified@domus.test',
+      token: originalVerificationCode,
     })).status, 400);
     assert.equal((await productionRequest('/auth/verify-email', {
-      token: resentVerificationToken,
+      email: 'other@domus.test',
+      token: resentVerificationCode,
+    })).status, 400);
+    assert.equal((await productionRequest('/auth/verify-email', {
+      email: 'verified@domus.test',
+      token: resentVerificationCode,
     })).status, 200);
     assert.equal((await productionRequest('/auth/verify-email', {
-      token: resentVerificationToken,
+      email: 'verified@domus.test',
+      token: resentVerificationCode,
     })).status, 400);
     assert.equal((await productionRequest('/auth/login', {
       email: 'verified@domus.test',

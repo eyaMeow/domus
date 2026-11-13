@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual, createHmac } from 'node:crypto';
+import { createHash, randomBytes, randomInt, randomUUID, scryptSync, timingSafeEqual, createHmac } from 'node:crypto';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import nodemailer from 'nodemailer';
@@ -482,12 +482,29 @@ function allowLimitedRequest(request, bucket, limit, windowMs = 15 * 60 * 1000) 
   return true;
 }
 
+function authTokenHash(token, userId, purpose) {
+  if (purpose === 'verify_email') {
+    return createHmac('sha256', jwtSecret).update(`${purpose}:${userId}:${token}`).digest('hex');
+  }
+  return createHash('sha256').update(token).digest('hex');
+}
+
 async function createAuthToken(userId, purpose) {
-  const token = randomBytes(32).toString('hex');
+  const previous = await db.prepare(
+    'SELECT token_hash FROM auth_tokens WHERE user_id = ? AND purpose = ?',
+  ).get(userId, purpose);
+  let token;
+  let tokenHash;
+  do {
+    token = purpose === 'verify_email'
+      ? String(randomInt(0, 1_000_000)).padStart(6, '0')
+      : randomBytes(32).toString('hex');
+    tokenHash = authTokenHash(token, userId, purpose);
+  } while (previous && tokenHash === previous.token_hash);
   const expiresAt = Date.now() + (purpose === 'verify_email' ? 30 : 60) * 60 * 1000;
   await db.prepare('DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?').run(userId, purpose);
   await db.prepare('INSERT INTO auth_tokens (token_hash, user_id, purpose, expires_at, created_at) VALUES (?, ?, ?, ?, ?)').run(
-    createHash('sha256').update(token).digest('hex'), userId, purpose, expiresAt, Date.now(),
+    tokenHash, userId, purpose, expiresAt, Date.now(),
   );
   return token;
 }
@@ -499,13 +516,24 @@ async function sendAuthEmail(email, token, purpose) {
     from: smtpFrom,
     to: email,
     subject: verify ? 'Verify your Domus email' : 'Reset your Domus password',
-    text: `${verify ? 'Verify your email address' : 'Reset your password'} using this one-time code:\n\n${token}\n\nThis code expires in ${verify ? '30 minutes' : '60 minutes'}.`,
+    text: `${verify ? 'Verify your email address using this 6-digit code:' : 'Reset your password using this one-time code:'}\n\n${token}\n\nThis code expires in ${verify ? '30 minutes' : '60 minutes'}.`,
   });
 }
 
-async function consumeAuthToken(token, purpose) {
-  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/i.test(token)) return null;
-  const hash = createHash('sha256').update(token).digest('hex');
+async function consumeAuthToken(token, purpose, email) {
+  if (typeof token !== 'string') return null;
+  let userId;
+  if (purpose === 'verify_email') {
+    if (!/^\d{6}$/.test(token) || typeof email !== 'string') return null;
+    const account = await db.prepare(
+      'SELECT id FROM users WHERE lower(email) = lower(?)',
+    ).get(email.trim());
+    if (!account) return null;
+    userId = account.id;
+  } else if (!/^[a-f0-9]{64}$/i.test(token)) {
+    return null;
+  }
+  const hash = authTokenHash(token, userId, purpose);
   await db.exec('BEGIN IMMEDIATE');
   try {
     const stored = await db.prepare(`
@@ -762,7 +790,7 @@ async function handle(request, response) {
 
     if (request.method === 'POST' && path === '/auth/verify-email') {
       const input = await bodyOf(request);
-      const consumed = await consumeAuthToken(input.token, 'verify_email');
+      const consumed = await consumeAuthToken(input.token, 'verify_email', input.email);
       if (!consumed) {
         json(response, 400, { error: 'Code de vérification invalide ou expiré.' });
         return;
