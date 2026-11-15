@@ -321,6 +321,13 @@ test('supports the main account, listings, favorites, chat, and deletion flows',
     token: adminToken,
     body: { status: 'resolved' },
   })).data.status, 'resolved');
+  const activeReportsAfterResolution = await request('/admin/reports', {
+    token: adminToken,
+  });
+  assert.equal(
+    activeReportsAfterResolution.data.items.some((item) => item.id === report.data.id),
+    false,
+  );
   const adminUpdate = await request(`/admin/properties/${published.data.id}`, {
     method: 'PATCH',
     token: adminToken,
@@ -337,12 +344,25 @@ test('supports the main account, listings, favorites, chat, and deletion flows',
     method: 'DELETE',
     token: adminToken,
   })).status, 404);
-  assert.ok((await request('/admin/reports', { token: adminToken })).data.items
-    .some((item) => item.id === report.data.id && item.propertyTitle === null));
+  const reportForDeletedListing = await request('/properties/4/reports', {
+    method: 'POST',
+    token,
+    body: { reason: 'The listing details are misleading.' },
+  });
+  assert.equal(reportForDeletedListing.status, 201);
   assert.equal((await request('/admin/properties/4', {
     method: 'DELETE',
     token: adminToken,
   })).status, 200);
+  const activeReportsAfterListingDeletion = await request('/admin/reports', {
+    token: adminToken,
+  });
+  assert.equal(
+    activeReportsAfterListingDeletion.data.items.some(
+      (item) => item.id === reportForDeletedListing.data.id,
+    ),
+    false,
+  );
   assert.equal((await request('/devices', {
     method: 'POST',
     token: ownerLogin.data.token,

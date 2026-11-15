@@ -985,7 +985,17 @@ async function handle(request, response) {
           json(response, 404, { error: 'Annonce introuvable.' });
           return;
         }
-        await db.prepare('DELETE FROM properties WHERE id = ?').run(propertyId);
+        await db.exec('BEGIN IMMEDIATE');
+        try {
+          await db.prepare(
+            "UPDATE property_reports SET status = 'resolved' WHERE property_id = ? AND status = 'pending'",
+          ).run(propertyId);
+          await db.prepare('DELETE FROM properties WHERE id = ?').run(propertyId);
+          await db.exec('COMMIT');
+        } catch (error) {
+          await db.exec('ROLLBACK');
+          throw error;
+        }
         await pruneUnreferencedUploads(referencedUploadFilenames([previous]));
         json(response, 200, { deleted: true });
         return;
@@ -1002,7 +1012,8 @@ async function handle(request, response) {
           JOIN users reporter ON reporter.id = r.reporter_id
           LEFT JOIN properties p ON p.id = r.property_id
           LEFT JOIN users owner ON owner.id = p.owner_id
-          ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END, r.created_at DESC
+          WHERE r.status = 'pending'
+          ORDER BY r.created_at DESC
           LIMIT 500
         `).all();
         json(response, 200, { items: reports });

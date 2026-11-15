@@ -269,6 +269,17 @@ const _translations = <String, Map<String, String>>{
     'Si un compte correspondant peut être vérifié, un courriel de confirmation a été envoyé.': 'If a matching account can be verified, a confirmation email has been sent.',
     'Une adresse API HTTPS est obligatoire pour la version publiée.':
         'An HTTPS API address is required for the release build.',
+    'Une erreur serveur est survenue.':
+        'A server error occurred. Please try again.',
+    'Accès administrateur requis.': 'Administrator access is required.',
+    'L’accès administrateur n’est pas configuré.':
+        'Administrator access is not configured.',
+    'Trop de tentatives. Veuillez réessayer dans quelques minutes.':
+        'Too many attempts. Please try again in a few minutes.',
+    'Utilisateur introuvable.': 'User not found.',
+    'Annonce introuvable.': 'Listing not found.',
+    'Signalement introuvable.': 'Report not found.',
+    'Statut de signalement non valide.': 'Invalid report status.',
     'Votre annonce est en ligne.': 'Your listing is live.',
     'Votre compte et vos données ont été supprimés.':
         'Your account and data have been deleted.',
@@ -302,6 +313,7 @@ const _translations = <String, Map<String, String>>{
     'Modifier l’annonce': 'Edit listing',
     'Supprimer mon annonce ?': 'Delete my listing?',
     'Supprimer cette annonce ?': 'Delete this listing?',
+    'Supprimer l’annonce': 'Delete listing',
     'Cette action est définitive.': 'This action cannot be undone.',
     'Confirmer': 'Confirm',
     'Envoyer': 'Submit',
@@ -324,6 +336,9 @@ const _translations = <String, Map<String, String>>{
     'rejected': 'Rejected',
     'Résoudre': 'Resolve',
     'Rejeter': 'Reject',
+    'Ignorer': 'Dismiss',
+    'Signalement traité.': 'Report resolved.',
+    'Signalement ignoré.': 'Report dismissed.',
     'Annonce supprimée.': 'Listing deleted.',
     'Annonce mise à jour.': 'Listing updated.',
     'Saisissez un titre et un prix valide.': 'Enter a valid title and price.',
@@ -604,6 +619,17 @@ const _translations = <String, Map<String, String>>{
         'إذا أمكن التحقق من الحساب المطابق، فقد أُرسلت رسالة تأكيد.',
     'Une adresse API HTTPS est obligatoire pour la version publiée.':
         'يلزم استخدام عنوان API آمن HTTPS للإصدار المنشور.',
+    'Une erreur serveur est survenue.':
+        'حدث خطأ في الخادم. يُرجى المحاولة مرة أخرى.',
+    'Accès administrateur requis.': 'يلزم تسجيل دخول المسؤول.',
+    'L’accès administrateur n’est pas configuré.':
+        'لم يتم إعداد صلاحيات المسؤول.',
+    'Trop de tentatives. Veuillez réessayer dans quelques minutes.':
+        'محاولات كثيرة جدًا. يُرجى المحاولة بعد بضع دقائق.',
+    'Utilisateur introuvable.': 'لم يتم العثور على المستخدم.',
+    'Annonce introuvable.': 'لم يتم العثور على الإعلان.',
+    'Signalement introuvable.': 'لم يتم العثور على البلاغ.',
+    'Statut de signalement non valide.': 'حالة البلاغ غير صالحة.',
     'Votre annonce est en ligne.': 'تم نشر إعلانك.',
     'Votre compte et vos données ont été supprimés.': 'تم حذف حسابك وبياناتك.',
     'Vous pouvez ajouter jusqu’à 10 photos.': 'يمكنك إضافة ١٠ صور كحد أقصى.',
@@ -636,6 +662,7 @@ const _translations = <String, Map<String, String>>{
     'Modifier l’annonce': 'تعديل الإعلان',
     'Supprimer mon annonce ?': 'حذف إعلاني؟',
     'Supprimer cette annonce ?': 'حذف هذا الإعلان؟',
+    'Supprimer l’annonce': 'حذف الإعلان',
     'Cette action est définitive.': 'لا يمكن التراجع عن هذا الإجراء.',
     'Confirmer': 'تأكيد',
     'Envoyer': 'إرسال',
@@ -658,6 +685,9 @@ const _translations = <String, Map<String, String>>{
     'rejected': 'مرفوض',
     'Résoudre': 'معالجة',
     'Rejeter': 'رفض',
+    'Ignorer': 'تجاهل',
+    'Signalement traité.': 'تمت معالجة البلاغ.',
+    'Signalement ignoré.': 'تم تجاهل البلاغ.',
     'Annonce supprimée.': 'تم حذف الإعلان.',
     'Annonce mise à jour.': 'تم تحديث الإعلان.',
     'Saisissez un titre et un prix valide.': 'أدخل عنوانًا وسعرًا صالحين.',

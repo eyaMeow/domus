@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'package:domus_flutter/localization.dart';
 import 'package:domus_flutter/main.dart';
 
 Future<void> pumpReadyApp(WidgetTester tester) async {
@@ -13,6 +14,14 @@ Future<void> pumpReadyApp(WidgetTester tester) async {
 
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  test('localizes server and report action notices in Arabic', () {
+    expect(
+      translate('ar', 'Une erreur serveur est survenue.'),
+      'حدث خطأ في الخادم. يُرجى المحاولة مرة أخرى.',
+    );
+    expect(translate('ar', 'Ignorer'), 'تجاهل');
+  });
 
   test('resolves absolute, relative, and previously prefixed photo URLs', () {
     const absoluteUrl = 'https://storage.example/photo.jpg';

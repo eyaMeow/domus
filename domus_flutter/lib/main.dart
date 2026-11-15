@@ -1283,6 +1283,11 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
         body: {'status': status},
       );
       await _loadAdminData();
+      if (mounted) {
+        _showNotice(
+          status == 'resolved' ? 'Signalement traité.' : 'Signalement ignoré.',
+        );
+      }
     } catch (error) {
       _showNotice(error.toString().replaceFirst('Exception: ', ''));
     }
@@ -2702,6 +2707,12 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
           ),
         ..._adminReports.map((report) {
           final status = report['status'] as String? ?? 'pending';
+          final matchingProperties = _adminProperties
+              .where((item) => item['id'] == report['propertyId'])
+              .toList();
+          final reportedProperty = matchingProperties.isEmpty
+              ? null
+              : matchingProperties.first;
           return Card(
             color: Colors.white,
             clipBehavior: Clip.antiAlias,
@@ -2743,7 +2754,18 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
                           TextButton(
                             onPressed: () =>
                                 _reviewAdminReport(report, 'rejected'),
-                            child: const _LocalizedText('Rejeter'),
+                            child: const _LocalizedText('Ignorer'),
+                          ),
+                        if (reportedProperty != null)
+                          TextButton.icon(
+                            onPressed: () =>
+                                _deleteAdminProperty(reportedProperty),
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: danger,
+                              size: 18,
+                            ),
+                            label: const _LocalizedText('Supprimer l’annonce'),
                           ),
                       ],
                     ),
