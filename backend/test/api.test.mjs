@@ -146,6 +146,12 @@ test('supports the main account, listings, favorites, chat, and deletion flows',
   assert.equal(adminLogin.status, 200);
   assert.equal(adminLogin.data.user.role, 'admin');
   const adminToken = adminLogin.data.token;
+  const adminListings = await request('/properties', { token: adminToken });
+  assert.equal(adminListings.status, 200);
+  assert.ok(adminListings.data.items.length >= 4);
+  const adminListing = await request('/properties/1', { token: adminToken });
+  assert.equal(adminListing.status, 200);
+  assert.equal(adminListing.data.favorite, false);
   const adminSession = await request('/auth/me', { token: adminToken });
   assert.equal(adminSession.status, 200);
   assert.deepEqual(adminSession.data, adminLogin.data.user);

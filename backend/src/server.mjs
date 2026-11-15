@@ -1042,7 +1042,7 @@ async function handle(request, response) {
 
     if (request.method === 'GET' && path === '/properties') {
       const filters = [];
-      const values = [user?.id ?? 0];
+      const values = [user?.role === 'user' ? user.id : 0];
       filters.push("p.status = 'online'");
       for (const [parameter, column, convert] of [
         ['transaction', 'p.transaction_type', String], ['type', 'p.type', String],
@@ -1094,7 +1094,8 @@ async function handle(request, response) {
 
     const propertyMatch = path.match(/^\/properties\/(\d+)$/);
     if (request.method === 'GET' && propertyMatch) {
-      const row = await db.prepare(`${propertySelect} WHERE p.id = ? AND p.status = 'online'`).get(user?.id ?? 0, Number(propertyMatch[1]));
+      const favoriteUserId = user?.role === 'user' ? user.id : 0;
+      const row = await db.prepare(`${propertySelect} WHERE p.id = ? AND p.status = 'online'`).get(favoriteUserId, Number(propertyMatch[1]));
       json(response, row ? 200 : 404, row ? publicProperty(row) : { error: 'Annonce introuvable.' });
       return;
     }
