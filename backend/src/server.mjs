@@ -81,10 +81,12 @@ if (isProduction) {
   }
 }
 if (mailConfigured) {
+  const smtpSecure = process.env.SMTP_SECURE === 'true';
   mailer = nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
-    secure: process.env.SMTP_SECURE === 'true',
+    secure: smtpSecure,
+    requireTLS: !smtpSecure && process.env.NODE_ENV !== 'test',
     auth: { user: smtpUser, pass: smtpPassword },
   });
 }
@@ -470,6 +472,7 @@ function requireTermsAccepted(user) {
   if (!user.termsAcceptedAt) {
     const error = new Error('Veuillez accepter les conditions d’utilisation pour publier du contenu ou envoyer des messages.');
     error.status = 403;
+    error.code = 'terms_acceptance_required';
     throw error;
   }
 }
@@ -691,13 +694,13 @@ async function handle(request, response) {
       return;
     }
 
-    if (request.method === 'GET' && legalPages[path]) {
+    if ((request.method === 'GET' || request.method === 'HEAD') && legalPages[path]) {
       response.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
         'x-content-type-options': 'nosniff',
         'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
       });
-      response.end(legalPages[path]);
+      response.end(request.method === 'HEAD' ? undefined : legalPages[path]);
       return;
     }
 
@@ -1560,7 +1563,10 @@ async function handle(request, response) {
   } catch (error) {
     const status = error.status ?? (error.message.includes('Request body') ? 400 : 500);
     if (status >= 500) console.error(error);
-    json(response, status, { error: status >= 500 ? 'Une erreur serveur est survenue.' : error.message });
+    json(response, status, {
+      error: status >= 500 ? 'Une erreur serveur est survenue.' : error.message,
+      ...(error.code === 'terms_acceptance_required' ? { code: error.code } : {}),
+    });
   }
 }
 

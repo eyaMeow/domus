@@ -137,6 +137,10 @@ test('serves public privacy, terms, and account deletion pages', async () => {
     const html = await response.text();
     assert.ok(html.includes(title));
     assert.ok(html.includes('mailto:'));
+    const headResponse = await fetch(`${baseUrl}${path}`, { method: 'HEAD' });
+    assert.equal(headResponse.status, 200);
+    assert.match(headResponse.headers.get('content-type'), /text\/html/);
+    assert.equal(await headResponse.text(), '');
   }
 });
 
@@ -155,11 +159,13 @@ test('supports the main account, listings, favorites, chat, and deletion flows',
     'UPDATE users SET terms_accepted_at = NULL WHERE id = ?',
   ).run(login.data.user.id);
   migrationDatabase.close();
-  assert.equal((await request('/properties', {
+  const unacceptedListing = await request('/properties', {
     method: 'POST',
     token,
     body: { title: 'Unaccepted listing', city: 'Tunis', price: 1000 },
-  })).status, 403);
+  });
+  assert.equal(unacceptedListing.status, 403);
+  assert.equal(unacceptedListing.data.code, 'terms_acceptance_required');
   assert.ok((await request('/terms/accept', { method: 'POST', token }))
     .data.termsAcceptedAt);
   assert.equal((await request('/admin/users')).status, 403);
@@ -652,5 +658,99 @@ test('requires email verification and supports resending verification emails', a
     }
     for (const suffix of ['', '-shm', '-wal']) rmSync(`${productionDatabase}${suffix}`, { force: true });
     rmSync(productionUploads, { recursive: true, force: true });
+  }
+});
+
+test('requires STARTTLS before sending SMTP credentials outside test mode', async () => {
+  const insecureSmtpServer = createServer((socket) => {
+    let buffered = '';
+    const commands = [];
+    socket.write('220 domus-test SMTP\r\n');
+    socket.on('data', (chunk) => {
+      buffered += chunk.toString();
+      let newline;
+      while ((newline = buffered.indexOf('\n')) !== -1) {
+        const line = buffered.slice(0, newline).replace(/\r$/, '');
+        buffered = buffered.slice(newline + 1);
+        commands.push(line);
+        if (line.startsWith('EHLO') || line.startsWith('HELO')) {
+          socket.write('250-domus-test\r\n250 AUTH PLAIN LOGIN\r\n');
+        } else if (line === 'QUIT') {
+          socket.end('221 Bye\r\n');
+        } else {
+          socket.write('250 OK\r\n');
+        }
+      }
+    });
+    socket.on('close', () => { smtpCommands.push(...commands); });
+    socket.on('error', () => {});
+  });
+  const smtpCommands = [];
+  await new Promise((resolve) => insecureSmtpServer.listen(0, '127.0.0.1', resolve));
+
+  const testDatabase = join(tmpdir(), `domus-smtp-security-${process.pid}.sqlite`);
+  const testUploads = join(tmpdir(), `domus-smtp-security-uploads-${process.pid}`);
+  const port = await unusedPort();
+  const output = { value: '' };
+  const apiServer = spawn(process.execPath, ['src/server.mjs'], {
+    cwd: backendDirectory,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      NODE_ENV: 'development',
+      DATABASE_PATH: testDatabase,
+      UPLOADS_PATH: testUploads,
+      DOMUS_REQUIRE_EMAIL_VERIFICATION: 'true',
+      DOMUS_JWT_SECRET: 'domus-smtp-security-test-secret-0123456789',
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: String(insecureSmtpServer.address().port),
+      SMTP_SECURE: 'false',
+      SMTP_USER: 'test-user',
+      SMTP_PASSWORD: 'test-password',
+      SMTP_FROM: 'no-reply@domus.test',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  apiServer.stdout.setEncoding('utf8').on('data', (chunk) => { output.value += chunk; });
+  apiServer.stderr.setEncoding('utf8').on('data', (chunk) => { output.value += chunk; });
+
+  try {
+    const apiUrl = `http://127.0.0.1:${port}`;
+    let ready = false;
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      if (apiServer.exitCode !== null) throw new Error(`API exited: ${output.value}`);
+      try {
+        if ((await fetch(`${apiUrl}/health`)).ok) {
+          ready = true;
+          break;
+        }
+      } catch {
+        await delay(100);
+      }
+    }
+    assert.ok(ready, `API did not start: ${output.value}`);
+
+    const registration = await fetch(`${apiUrl}/auth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'SMTP Test',
+        email: 'smtp-security@domus.test',
+        password: 'Password123',
+        acceptedTerms: true,
+      }),
+    });
+    assert.equal(registration.status, 201);
+    for (let attempt = 0; attempt < 40 && smtpCommands.length === 0; attempt += 1) await delay(25);
+    assert.ok(smtpCommands.some((command) => command.startsWith('EHLO')));
+    assert.equal(smtpCommands.some((command) => command.startsWith('AUTH')), false);
+  } finally {
+    if (apiServer.exitCode === null && apiServer.signalCode === null) {
+      apiServer.kill();
+      await new Promise((resolve) => apiServer.once('exit', resolve));
+    }
+    await new Promise((resolve) => insecureSmtpServer.close(resolve));
+    for (const suffix of ['', '-shm', '-wal']) rmSync(`${testDatabase}${suffix}`, { force: true });
+    rmSync(testUploads, { recursive: true, force: true });
   }
 });
