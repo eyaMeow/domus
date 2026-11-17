@@ -34,12 +34,15 @@ The map displays precise coordinates selected by listing owners; it does not dis
 - Create and safely back up a Play App Signing upload key. Never commit signing keys or passwords.
 - Host the privacy policy at a public URL and put that URL in Play Console and in the app. Complete the Data safety form accurately for account details, messages, listing photos, and enabled SDKs.
 - Provide account deletion both in the app and through a public web URL before publishing accounts that can be created.
+- Because Domus includes public listings and direct messages, provide in-app user/listing reporting and user blocking; require terms acceptance before users can publish listings or send messages.
 - Provide original app icons, feature graphic, phone screenshots, store description, support contact, content rating, target-audience declaration, and ads declaration. Review current target API and testing requirements at release time.
 - Test signed releases on supported Android versions and screen sizes, including offline/error states, email verification, account creation/login, listing photos, chat, account deletion, and API HTTPS connectivity.
+- New personal developer accounts created on or after November 13, 2023 must complete a closed test with at least 12 opted-in testers continuously for 14 days before applying for production access.
+- The developer account is marked as a trader; confirm the public visibility of the legal and contact details shown in Play Console. Review the Android developer verification package-name requirements before rollout.
 
 ## Build outputs
 
 - React Native: set `EXPO_PUBLIC_API_URL` to the deployed HTTPS API URL in the build environment, then build a signed Android release using the configured native MapLibre setup.
 - Flutter: set `DOMUS_API_URL` to the deployed HTTPS API URL using local build configuration, configure `android/key.properties`, then run `flutter build appbundle --release`.
 
-The Flutter AAB has not yet been verified in this environment because Gradle's distribution download stalled. Version codes must increase for each Play release. Privacy and terms files in `docs/` are templates and need publisher details, public URLs, and legal review.
+The signed Flutter AAB at `domus_flutter/build/app/outputs/bundle/release/app-release.aab` was rebuilt and signature-verified locally on November 17, 2026 (version `1.0.0+1`, target API 36). It has not been uploaded. The publisher reviewed and approved the privacy, terms, and account-deletion page text in `backend/src/legal-pages.mjs`; deploy the backend and verify all three public URLs before submitting the app.

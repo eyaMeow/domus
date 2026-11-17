@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
+import { DatabaseSync } from 'node:sqlite';
 import { rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -124,6 +125,21 @@ after(async () => {
   rmSync(uploadsPath, { recursive: true, force: true });
 });
 
+test('serves public privacy, terms, and account deletion pages', async () => {
+  for (const [path, title] of [
+    ['/privacy-policy', 'Politique de confidentialité'],
+    ['/terms-of-use', 'Conditions d’utilisation'],
+    ['/account-deletion', 'Demander la suppression du compte'],
+  ]) {
+    const response = await fetch(`${baseUrl}${path}`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /text\/html/);
+    const html = await response.text();
+    assert.ok(html.includes(title));
+    assert.ok(html.includes('mailto:'));
+  }
+});
+
 test('supports the main account, listings, favorites, chat, and deletion flows', async () => {
   const login = await request('/auth/login', {
     method: 'POST',
@@ -131,6 +147,21 @@ test('supports the main account, listings, favorites, chat, and deletion flows',
   });
   assert.equal(login.status, 200);
   const token = login.data.token;
+  assert.ok(login.data.user.termsAcceptedAt);
+  assert.ok((await request('/terms/accept', { method: 'POST', token }))
+    .data.termsAcceptedAt);
+  const migrationDatabase = new DatabaseSync(databasePath);
+  migrationDatabase.prepare(
+    'UPDATE users SET terms_accepted_at = NULL WHERE id = ?',
+  ).run(login.data.user.id);
+  migrationDatabase.close();
+  assert.equal((await request('/properties', {
+    method: 'POST',
+    token,
+    body: { title: 'Unaccepted listing', city: 'Tunis', price: 1000 },
+  })).status, 403);
+  assert.ok((await request('/terms/accept', { method: 'POST', token }))
+    .data.termsAcceptedAt);
   assert.equal((await request('/admin/users')).status, 403);
   assert.equal((await request('/admin/login', {
     method: 'POST',
@@ -289,10 +320,72 @@ test('supports the main account, listings, favorites, chat, and deletion flows',
     body: { propertyId: 1 },
   });
   assert.equal(conversation.status, 200);
+  assert.equal((await request('/conversations', { token })).data.items[0].contactUserId, 1);
   const ownerLogin = await request('/auth/login', {
     method: 'POST',
     body: { email: 'sami@domus.tn', password: 'Domus2026' },
   });
+  const userReport = await request(`/users/${ownerLogin.data.user.id}/reports`, {
+    method: 'POST',
+    token,
+    body: { reason: 'This account is posting misleading listings.' },
+  });
+  assert.equal(userReport.status, 201);
+  assert.equal((await request(`/users/${ownerLogin.data.user.id}/reports`, {
+    method: 'POST',
+    token,
+    body: { reason: 'Another report for this account.' },
+  })).status, 409);
+  assert.equal((await request(`/users/${login.data.user.id}/reports`, {
+    method: 'POST',
+    token,
+    body: { reason: 'I cannot report myself.' },
+  })).status, 400);
+  const adminUserReports = await request('/admin/user-reports', {
+    token: adminToken,
+  });
+  assert.equal(adminUserReports.status, 200);
+  assert.ok(adminUserReports.data.items.some(
+    (item) => item.id === userReport.data.id
+      && item.reportedUserId === ownerLogin.data.user.id,
+  ));
+  assert.equal((await request(`/admin/user-reports/${userReport.data.id}`, {
+    method: 'PATCH',
+    token: adminToken,
+    body: { status: 'resolved' },
+  })).data.status, 'resolved');
+  assert.equal((await request('/admin/user-reports', {
+    token: adminToken,
+  })).data.items.some((item) => item.id === userReport.data.id), false);
+  assert.deepEqual(await request(`/users/${ownerLogin.data.user.id}/block`, {
+    method: 'PUT',
+    token,
+  }), {
+    status: 200,
+    data: { blocked: true },
+  });
+  assert.equal((await request('/conversations', { token })).data.items.length, 0);
+  assert.equal((await request('/conversations', {
+    method: 'POST',
+    token,
+    body: { propertyId: 1 },
+  })).status, 403);
+  assert.equal((await request(`/conversations/${conversation.data.id}/messages`, {
+    token,
+  })).status, 403);
+  assert.equal((await request(`/conversations/${conversation.data.id}/messages`, {
+    method: 'POST',
+    token,
+    body: { body: 'Please respond.' },
+  })).status, 403);
+  assert.deepEqual(await request(`/users/${ownerLogin.data.user.id}/block`, {
+    method: 'DELETE',
+    token,
+  }), {
+    status: 200,
+    data: { blocked: false },
+  });
+  assert.equal((await request('/conversations', { token })).data.items.length, 1);
   const report = await request(`/properties/${published.data.id}/reports`, {
     method: 'POST',
     token: ownerLogin.data.token,

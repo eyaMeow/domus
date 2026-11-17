@@ -6,6 +6,7 @@ import nodemailer from 'nodemailer';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 import { createPostgresDatabase, createSqliteDatabase } from './database.mjs';
+import { legalPages } from './legal-pages.mjs';
 
 const port = Number(process.env.PORT ?? 4000);
 const databasePath = resolve(process.env.DATABASE_PATH ?? './data/domus.sqlite');
@@ -205,6 +206,7 @@ if (isProduction) {
     password_hash TEXT NOT NULL,
     password_salt TEXT NOT NULL,
     banned_at TEXT,
+    terms_accepted_at TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
   CREATE TABLE IF NOT EXISTS properties (
@@ -283,6 +285,25 @@ if (isProduction) {
   );
   CREATE INDEX IF NOT EXISTS property_reports_status_created
     ON property_reports(status, created_at DESC);
+  CREATE TABLE IF NOT EXISTS user_blocks (
+    blocker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (blocker_id, blocked_id),
+    CHECK (blocker_id <> blocked_id)
+  );
+  CREATE TABLE IF NOT EXISTS user_reports (
+    id INTEGER PRIMARY KEY,
+    reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    reported_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'resolved', 'rejected')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (reporter_id, reported_user_id),
+    CHECK (reporter_id <> reported_user_id)
+  );
+  CREATE INDEX IF NOT EXISTS user_reports_status_created
+    ON user_reports(status, created_at DESC);
 `);
 const propertyColumnNames = new Set(
   db.prepare('PRAGMA table_info(properties)').all().map((column) => column.name),
@@ -295,6 +316,9 @@ if (!userColumnsPresent.includes('email_verified')) {
 }
 if (!userColumnsPresent.includes('banned_at')) {
   await db.exec('ALTER TABLE users ADD COLUMN banned_at TEXT');
+}
+if (!userColumnsPresent.includes('terms_accepted_at')) {
+  await db.exec('ALTER TABLE users ADD COLUMN terms_accepted_at TEXT');
 }
 const propertyColumnsPresent = db.prepare('PRAGMA table_info(properties)').all().map((column) => column.name);
 if (!propertyColumnsPresent.includes('photos')) {
@@ -311,12 +335,12 @@ async function seed() {
   if (count > 0) return;
   const demo = hashPassword('Domus2026');
   const ownerResult = await db.prepare(
-    'INSERT INTO users (name, email, phone, city, about, password_hash, password_salt) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO users (name, email, phone, city, about, password_hash, password_salt, terms_accepted_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
   ).run('Sami Ben Ali', 'sami@domus.tn', '+216 20 123 456', 'La Marsa', 'Particulier à La Marsa.', demo.hash, demo.salt);
   const ownerId = Number(ownerResult.lastInsertRowid);
   const buyer = hashPassword('Domus2026');
   await db.prepare(
-    'INSERT INTO users (name, email, phone, city, about, password_hash, password_salt) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO users (name, email, phone, city, about, password_hash, password_salt, terms_accepted_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
   ).run('Eya Chihi', 'demo@domus.tn', '+216 20 123 456', 'Tunis', 'À la recherche de votre prochain chez-vous.', buyer.hash, buyer.salt);
   const insertProperty = db.prepare(`
     INSERT INTO properties
@@ -384,7 +408,8 @@ async function userFromToken(request) {
   }
   if (claims.role && claims.role !== 'user') return null;
   const account = await db.prepare(`
-    SELECT id, name, email, phone, city, about, banned_at
+    SELECT id, name, email, phone, city, about, banned_at,
+      terms_accepted_at AS termsAcceptedAt
     FROM users WHERE id = ?
   `).get(claims.sub);
   if (!account) return null;
@@ -439,6 +464,14 @@ function requireUser(user) {
     throw error;
   }
   return user;
+}
+
+function requireTermsAccepted(user) {
+  if (!user.termsAcceptedAt) {
+    const error = new Error('Veuillez accepter les conditions d’utilisation pour publier du contenu ou envoyer des messages.');
+    error.status = 403;
+    throw error;
+  }
 }
 
 function requireAdmin(user) {
@@ -658,8 +691,18 @@ async function handle(request, response) {
       return;
     }
 
+    if (request.method === 'GET' && legalPages[path]) {
+      response.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
+      });
+      response.end(legalPages[path]);
+      return;
+    }
+
     if (request.method === 'POST' && path === '/uploads') {
-      requireUser(user);
+      requireTermsAccepted(requireUser(user));
       const input = await bodyOf(request, 4 * 1024 * 1024);
       const mimeType = String(input.mimeType ?? '');
       const encoded = String(input.base64 ?? '');
@@ -740,13 +783,20 @@ async function handle(request, response) {
       const credentials = hashPassword(password);
       try {
         const result = await db.prepare(`
-          INSERT INTO users (name, email, phone, password_hash, password_salt, email_verified)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO users (
+            name, email, phone, password_hash, password_salt, email_verified,
+            terms_accepted_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         `).run(
           name.slice(0, 100), email, String(input.phone ?? '').slice(0, 40),
           credentials.hash, credentials.salt, requireEmailVerification ? 0 : 1,
         );
-        const account = await db.prepare('SELECT id, name, email, phone, city, about FROM users WHERE id = ?').get(result.lastInsertRowid);
+        const account = await db.prepare(`
+          SELECT id, name, email, phone, city, about,
+            terms_accepted_at AS termsAcceptedAt
+          FROM users WHERE id = ?
+        `).get(result.lastInsertRowid);
         if (requireEmailVerification) {
           const verificationToken = await createAuthToken(account.id, 'verify_email');
           sendAuthEmail(account.email, verificationToken, 'verify_email').catch((error) => {
@@ -754,7 +804,10 @@ async function handle(request, response) {
           });
           json(response, 201, { verificationRequired: true, user: account });
         } else {
-          json(response, 201, { token: tokenFor(account.id), user: account });
+          json(response, 201, {
+            token: tokenFor(account.id),
+            user: { ...account, role: 'user' },
+          });
         }
       } catch (error) {
         if (isUniqueConstraint(error)) {
@@ -871,8 +924,27 @@ async function handle(request, response) {
         });
         return;
       }
-      const safeUser = await db.prepare('SELECT id, name, email, phone, city, about FROM users WHERE id = ?').get(account.id);
-      json(response, 200, { token: tokenFor(account.id, 'user'), user: safeUser });
+      const safeUser = await db.prepare(`
+        SELECT id, name, email, phone, city, about,
+          terms_accepted_at AS termsAcceptedAt
+        FROM users WHERE id = ?
+      `).get(account.id);
+      json(response, 200, {
+        token: tokenFor(account.id, 'user'),
+        user: { ...safeUser, role: 'user' },
+      });
+      return;
+    }
+
+    if (request.method === 'POST' && path === '/terms/accept') {
+      const account = requireUser(user);
+      await db.prepare(
+        'UPDATE users SET terms_accepted_at = CURRENT_TIMESTAMP WHERE id = ?',
+      ).run(account.id);
+      const accepted = await db.prepare(
+        'SELECT terms_accepted_at AS termsAcceptedAt FROM users WHERE id = ?',
+      ).get(account.id);
+      json(response, 200, accepted);
       return;
     }
 
@@ -1020,6 +1092,40 @@ async function handle(request, response) {
         return;
       }
 
+      if (request.method === 'GET' && path === '/admin/user-reports') {
+        const reports = await db.prepare(`
+          SELECT r.id, r.reporter_id AS reporterId,
+            r.reported_user_id AS reportedUserId, r.reason, r.status,
+            r.created_at AS createdAt, reporter.name AS reporterName,
+            reported.name AS reportedUserName, reported.email AS reportedUserEmail,
+            reported.banned_at AS reportedUserBannedAt
+          FROM user_reports r
+          JOIN users reporter ON reporter.id = r.reporter_id
+          JOIN users reported ON reported.id = r.reported_user_id
+          WHERE r.status = 'pending'
+          ORDER BY r.created_at DESC
+          LIMIT 500
+        `).all();
+        json(response, 200, { items: reports });
+        return;
+      }
+
+      const userReportAdminMatch = path.match(/^\/admin\/user-reports\/(\d+)$/);
+      if (request.method === 'PATCH' && userReportAdminMatch) {
+        const input = await bodyOf(request);
+        if (!['resolved', 'rejected'].includes(input.status)) {
+          json(response, 400, { error: 'Statut de signalement non valide.' });
+          return;
+        }
+        const result = await db.prepare(
+          'UPDATE user_reports SET status = ? WHERE id = ?',
+        ).run(input.status, Number(userReportAdminMatch[1]));
+        json(response, result.changes ? 200 : 404, result.changes
+          ? { status: input.status }
+          : { error: 'Signalement introuvable.' });
+        return;
+      }
+
       const reportMatch = path.match(/^\/admin\/reports\/(\d+)$/);
       if (request.method === 'PATCH' && reportMatch) {
         const input = await bodyOf(request);
@@ -1139,6 +1245,7 @@ async function handle(request, response) {
 
     if (request.method === 'POST' && path === '/properties') {
       const account = requireUser(user);
+      requireTermsAccepted(account);
       const input = propertyInput(await bodyOf(request));
       const inserted = await db.prepare(`
         INSERT INTO properties
@@ -1153,6 +1260,7 @@ async function handle(request, response) {
     const managedPropertyMatch = path.match(/^\/my\/properties\/(\d+)$/);
     if (request.method === 'PUT' && managedPropertyMatch) {
       const account = requireUser(user);
+      requireTermsAccepted(account);
       const previous = await db.prepare(`
         SELECT image_url, photos FROM properties WHERE id = ? AND owner_id = ?
       `).get(Number(managedPropertyMatch[1]), account.id);
@@ -1221,24 +1329,93 @@ async function handle(request, response) {
       const rows = await db.prepare(`
         SELECT c.id, c.property_id AS propertyId, p.title AS propertyTitle,
           CASE WHEN c.buyer_id = ? THEN owner.name ELSE buyer.name END AS contactName,
+          CASE WHEN c.buyer_id = ? THEN owner.id ELSE buyer.id END AS contactUserId,
           (SELECT body FROM messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS lastMessage,
           (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS lastMessageAt
         FROM conversations c
         JOIN properties p ON p.id = c.property_id
         JOIN users buyer ON buyer.id = c.buyer_id
         JOIN users owner ON owner.id = c.owner_id
-        WHERE c.buyer_id = ? OR c.owner_id = ?
+        WHERE (c.buyer_id = ? OR c.owner_id = ?)
+          AND NOT EXISTS (
+            SELECT 1 FROM user_blocks b
+            WHERE (b.blocker_id = c.buyer_id AND b.blocked_id = c.owner_id)
+              OR (b.blocker_id = c.owner_id AND b.blocked_id = c.buyer_id)
+          )
         ORDER BY COALESCE(
           (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1),
           c.created_at
         ) DESC
-      `).all(account.id, account.id, account.id);
+      `).all(account.id, account.id, account.id, account.id);
       json(response, 200, { items: rows });
+      return;
+    }
+
+    const userBlockMatch = path.match(/^\/users\/(\d+)\/block$/);
+    if (userBlockMatch && ['PUT', 'DELETE'].includes(request.method)) {
+      const account = requireUser(user);
+      const targetId = Number(userBlockMatch[1]);
+      if (targetId === account.id) {
+        json(response, 400, { error: 'Vous ne pouvez pas bloquer votre propre compte.' });
+        return;
+      }
+      if (request.method === 'PUT') {
+        const target = await db.prepare('SELECT id FROM users WHERE id = ?').get(targetId);
+        if (!target) {
+          json(response, 404, { error: 'Utilisateur introuvable.' });
+          return;
+        }
+        await db.prepare(`
+          INSERT INTO user_blocks (blocker_id, blocked_id) VALUES (?, ?)
+          ON CONFLICT(blocker_id, blocked_id) DO NOTHING
+        `).run(account.id, targetId);
+      } else {
+        await db.prepare(
+          'DELETE FROM user_blocks WHERE blocker_id = ? AND blocked_id = ?',
+        ).run(account.id, targetId);
+      }
+      json(response, 200, { blocked: request.method === 'PUT' });
+      return;
+    }
+
+    const userReportMatch = path.match(/^\/users\/(\d+)\/reports$/);
+    if (request.method === 'POST' && userReportMatch) {
+      const account = requireUser(user);
+      const targetId = Number(userReportMatch[1]);
+      if (targetId === account.id) {
+        json(response, 400, { error: 'Vous ne pouvez pas signaler votre propre compte.' });
+        return;
+      }
+      const target = await db.prepare('SELECT id FROM users WHERE id = ?').get(targetId);
+      if (!target) {
+        json(response, 404, { error: 'Utilisateur introuvable.' });
+        return;
+      }
+      const input = await bodyOf(request);
+      const reason = String(input.reason ?? '').trim();
+      if (reason.length < 5 || reason.length > 1000) {
+        json(response, 400, { error: 'Le motif doit contenir entre 5 et 1000 caractères.' });
+        return;
+      }
+      try {
+        const report = await db.prepare(`
+          INSERT INTO user_reports (reporter_id, reported_user_id, reason)
+          VALUES (?, ?, ?)
+        `).run(account.id, targetId, reason);
+        json(response, 201, { id: Number(report.lastInsertRowid), submitted: true });
+      } catch (error) {
+        if (isUniqueConstraint(error)) {
+          json(response, 409, { error: 'Vous avez déjà signalé cet utilisateur.' });
+          return;
+        }
+        throw error;
+      }
       return;
     }
 
     if (request.method === 'POST' && path === '/conversations') {
       const account = requireUser(user);
+      requireTermsAccepted(account);
       const input = await bodyOf(request);
       const property = await db.prepare("SELECT id, owner_id FROM properties WHERE id = ? AND status = 'online'").get(Number(input.propertyId));
       if (!property) {
@@ -1247,6 +1424,16 @@ async function handle(request, response) {
       }
       if (property.owner_id === account.id) {
         json(response, 400, { error: 'Vous ne pouvez pas contacter votre propre annonce.' });
+        return;
+      }
+      const blocked = await db.prepare(`
+        SELECT 1 FROM user_blocks
+        WHERE (blocker_id = ? AND blocked_id = ?)
+           OR (blocker_id = ? AND blocked_id = ?)
+        LIMIT 1
+      `).get(account.id, property.owner_id, property.owner_id, account.id);
+      if (blocked) {
+        json(response, 403, { error: 'Cette conversation n’est pas disponible.' });
         return;
       }
       await db.prepare('INSERT OR IGNORE INTO conversations (property_id, buyer_id, owner_id) VALUES (?, ?, ?)').run(property.id, account.id, property.owner_id);
@@ -1259,9 +1446,26 @@ async function handle(request, response) {
     if (messagesMatch) {
       const account = requireUser(user);
       const conversationId = Number(messagesMatch[1]);
-      const conversation = await db.prepare('SELECT id FROM conversations WHERE id = ? AND (buyer_id = ? OR owner_id = ?)').get(conversationId, account.id, account.id);
+      const conversation = await db.prepare(`
+        SELECT id, buyer_id AS buyerId, owner_id AS ownerId
+        FROM conversations
+        WHERE id = ? AND (buyer_id = ? OR owner_id = ?)
+      `).get(conversationId, account.id, account.id);
       if (!conversation) {
         json(response, 404, { error: 'Conversation introuvable.' });
+        return;
+      }
+      const otherUserId = conversation.buyerId === account.id
+        ? conversation.ownerId
+        : conversation.buyerId;
+      const blocked = await db.prepare(`
+        SELECT 1 FROM user_blocks
+        WHERE (blocker_id = ? AND blocked_id = ?)
+           OR (blocker_id = ? AND blocked_id = ?)
+        LIMIT 1
+      `).get(account.id, otherUserId, otherUserId, account.id);
+      if (blocked) {
+        json(response, 403, { error: 'Cette conversation n’est plus disponible.' });
         return;
       }
       if (request.method === 'GET') {
@@ -1274,6 +1478,7 @@ async function handle(request, response) {
         return;
       }
       if (request.method === 'POST') {
+        requireTermsAccepted(account);
         const input = await bodyOf(request);
         const body = String(input.body ?? '').trim();
         if (!body || body.length > 4000) {
