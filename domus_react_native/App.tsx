@@ -442,7 +442,17 @@ export default function App() {
       setAuthPassword('');
       showNotice(authMode === 'login' ? 'Bienvenue chez vous !' : 'Votre compte est prêt.');
     } catch (error) {
-      showNotice((error as Error).message);
+      if (
+        error instanceof ApiError
+        && (error.code === 'email_delivery_failed' || error.code === 'email_verification_required')
+      ) {
+        setAuthPassword('');
+        setAuthToken('');
+        setAuthMode('verify');
+        showNotice(error.message);
+      } else {
+        showNotice((error as Error).message);
+      }
     } finally {
       setBusy(false);
     }
@@ -455,12 +465,32 @@ export default function App() {
     }
     setBusy(true);
     try {
-      await api('/auth/verify-email', { method: 'POST', body: { token: authToken.trim() } });
+      await api('/auth/verify-email', {
+        method: 'POST',
+        body: { email: authEmail.trim(), token: authToken.trim() },
+      });
       setAuthToken('');
       setAuthMode('login');
       showNotice('Adresse e-mail vérifiée. Vous pouvez maintenant vous connecter.');
     } catch {
       showNotice('Ce code de vérification est invalide ou expiré. Vérifiez-le.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendVerificationEmail() {
+    const email = authEmail.trim();
+    if (!email) {
+      showNotice('Saisissez votre adresse e-mail.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await api('/auth/resend-verification', { method: 'POST', body: { email } });
+      showNotice('Si un compte correspondant peut être vérifié, un courriel de confirmation a été envoyé.');
+    } catch (error) {
+      showNotice((error as Error).message);
     } finally {
       setBusy(false);
     }
@@ -888,6 +918,9 @@ export default function App() {
           <Text style={styles.muted}>Saisissez le code de vérification reçu par e-mail.</Text>
           <Input label="Code de vérification" value={authToken} onChangeText={setAuthToken} placeholder="Code reçu par e-mail" autoCapitalize="none" />
           <Button label="Vérifier mon adresse" onPress={() => void verifyEmail()} disabled={busy} />
+          <Pressable disabled={busy} onPress={() => void resendVerificationEmail()}>
+            <Text style={styles.linkText}>Renvoyer le courriel de vérification</Text>
+          </Pressable>
           <Pressable onPress={() => setAuthMode('login')}><Text style={styles.linkText}>Retour à la connexion</Text></Pressable>
         </View>
       );

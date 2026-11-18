@@ -546,14 +546,23 @@ async function createAuthToken(userId, purpose) {
 }
 
 async function sendAuthEmail(email, token, purpose) {
-  if (!mailer) return;
+  if (!mailer) {
+    throw Object.assign(new Error('SMTP email is not configured.'), {
+      code: 'smtp_not_configured',
+    });
+  }
   const verify = purpose === 'verify_email';
-  await mailer.sendMail({
+  const result = await mailer.sendMail({
     from: smtpFrom,
     to: email,
     subject: verify ? 'Verify your Domus email' : 'Reset your Domus password',
     text: `${verify ? 'Verify your email address using this 6-digit code:' : 'Reset your password using this one-time code:'}\n\n${token}\n\nThis code expires in ${verify ? '30 minutes' : '60 minutes'}.`,
   });
+  if (!result.accepted?.length || result.rejected?.length) {
+    throw Object.assign(new Error('SMTP server did not accept the recipient.'), {
+      code: 'recipient_rejected',
+    });
+  }
 }
 
 async function consumeAuthToken(token, purpose, email) {
@@ -592,7 +601,11 @@ async function consumeAuthToken(token, purpose, email) {
 function logDeliveryError(provider, error) {
   const rawCode = String(error?.code ?? error?.statusCode ?? error?.status ?? 'unknown');
   const code = /^[A-Za-z0-9_.-]{1,40}$/.test(rawCode) ? rawCode : 'provider_error';
-  console.error(`${provider} delivery failed (code: ${code}).`);
+  const responseCode = Number(error?.responseCode);
+  const smtpStatus = Number.isInteger(responseCode) && responseCode >= 400 && responseCode <= 599
+    ? `, SMTP ${responseCode}`
+    : '';
+  console.error(`${provider} delivery failed (code: ${code}${smtpStatus}).`);
 }
 
 async function sendPushNotifications(userId, title, body) {
@@ -802,9 +815,16 @@ async function handle(request, response) {
         `).get(result.lastInsertRowid);
         if (requireEmailVerification) {
           const verificationToken = await createAuthToken(account.id, 'verify_email');
-          sendAuthEmail(account.email, verificationToken, 'verify_email').catch((error) => {
+          try {
+            await sendAuthEmail(account.email, verificationToken, 'verify_email');
+          } catch (error) {
             logDeliveryError('SMTP email', error);
-          });
+            json(response, 503, {
+              code: 'email_delivery_failed',
+              error: 'Votre compte a été créé, mais le courriel de vérification n’a pas pu être envoyé. Demandez un nouvel envoi.',
+            });
+            return;
+          }
           json(response, 201, { verificationRequired: true, user: account });
         } else {
           json(response, 201, {
@@ -834,9 +854,11 @@ async function handle(request, response) {
       ).get(email);
       if (account) {
         const verificationToken = await createAuthToken(account.id, 'verify_email');
-        sendAuthEmail(email, verificationToken, 'verify_email').catch((error) => {
+        try {
+          await sendAuthEmail(email, verificationToken, 'verify_email');
+        } catch (error) {
           logDeliveryError('SMTP email', error);
-        });
+        }
       }
       json(response, 200, {
         message: 'Si un compte correspondant peut être vérifié, un courriel de confirmation a été envoyé.',

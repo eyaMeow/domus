@@ -683,6 +683,16 @@ class _DomusHomeState extends State<DomusHome> with WidgetsBindingObserver {
       }
     } catch (error) {
       if (error is DomusApiException &&
+          error.code == 'email_delivery_failed') {
+        _authPassword.clear();
+        _authToken.clear();
+        if (!mounted) return;
+        setState(() {
+          _registerMode = false;
+          _authFlow = 'verify';
+        });
+        _showNotice(error.message);
+      } else if (error is DomusApiException &&
           error.code == 'email_verification_required') {
         _authPassword.clear();
         _authToken.clear();

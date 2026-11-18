@@ -18,6 +18,7 @@ let baseUrl;
 let smtpPort;
 let serverOutput = '';
 const smtpMessages = [];
+const smtpRejectedRecipients = new Set();
 
 async function unusedPort() {
   const listener = createServer();
@@ -54,6 +55,14 @@ async function startSmtpMock() {
         const command = line.split(' ')[0].toUpperCase();
         if (command === 'EHLO' || command === 'HELO') socket.write('250-domus-test\r\n250 AUTH PLAIN LOGIN\r\n');
         else if (command === 'AUTH') socket.write('235 Authentication successful\r\n');
+        else if (command === 'RCPT') {
+          const recipient = line.match(/<([^>]+)>/)?.[1]?.toLowerCase();
+          socket.write(
+            smtpRejectedRecipients.has(recipient)
+              ? '550 5.1.1 Recipient rejected\r\n'
+              : '250 Recipient accepted\r\n',
+          );
+        }
         else if (command === 'DATA') {
           collectingMessage = true;
           socket.write('354 End data with <CR><LF>.<CR><LF>\r\n');
@@ -587,6 +596,31 @@ test('requires email verification and supports resending verification emails', a
       }
     }
     assert.ok(ready, `Production API did not start: ${output.value}`);
+
+    smtpRejectedRecipients.add('delivery-failed@domus.test');
+    const failedDelivery = await productionRequest('/auth/register', {
+      name: 'Delivery Failure',
+      email: 'delivery-failed@domus.test',
+      password: 'Password123',
+      acceptedTerms: true,
+    });
+    smtpRejectedRecipients.delete('delivery-failed@domus.test');
+    assert.equal(failedDelivery.status, 503);
+    assert.equal(failedDelivery.data.code, 'email_delivery_failed');
+
+    const beforeRecoveryCount = smtpMessages.length;
+    const recovery = await productionRequest('/auth/resend-verification', {
+      email: 'delivery-failed@domus.test',
+    });
+    assert.equal(recovery.status, 200);
+    assert.equal(smtpMessages.length, beforeRecoveryCount + 1);
+    const recoveryCode = smtpMessages.at(-1)?.match(/\n(\d{6})\n/)?.[1];
+    assert.ok(recoveryCode, 'retry should deliver a verification code');
+    assert.equal((await productionRequest('/auth/verify-email', {
+      email: 'delivery-failed@domus.test',
+      token: recoveryCode,
+    })).status, 200);
+
     const previousMessageCount = smtpMessages.length;
     const registration = await productionRequest('/auth/register', {
       name: 'Verified Account',
@@ -740,7 +774,8 @@ test('requires STARTTLS before sending SMTP credentials outside test mode', asyn
         acceptedTerms: true,
       }),
     });
-    assert.equal(registration.status, 201);
+    assert.equal(registration.status, 503);
+    assert.equal((await registration.json()).code, 'email_delivery_failed');
     for (let attempt = 0; attempt < 40 && smtpCommands.length === 0; attempt += 1) await delay(25);
     assert.ok(smtpCommands.some((command) => command.startsWith('EHLO')));
     assert.equal(smtpCommands.some((command) => command.startsWith('AUTH')), false);
